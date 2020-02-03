@@ -1,10 +1,9 @@
 import discord
 from discord.ext import commands
 import random
+from config import TOKEN
 
 bot = commands.Bot(command_prefix='.') # Префикс бота.
-
-TOKEN = "NjY5MjIxODc4ODg3NjEyNDI2.Xicr1Q.D4fM8DFhvBZMLwQwabxHNg-w0B8" #Токен бота.
 
 global auto_role
 auto_role = "@everyone"
