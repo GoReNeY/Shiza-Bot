@@ -40,7 +40,7 @@ async def ping(ctx):
     await ctx.send(f"Pong! {round(bot.latency * 1000)}ms")
 
 @bot.command(aliases=["8ball"])
-async def _8ball(ctx, * , question):        # Команда, выводящая сообщением случайный ответ из списка "responses".
+async def _8ball(ctx, * , question):        # Команда, выводящая сообщением случайный ответ из списка "responses"
     responses = ["Да","Нет"]
     await ctx.send(f"Вопрос: {question}\nОтвет: {random.choice(responses)}")
 

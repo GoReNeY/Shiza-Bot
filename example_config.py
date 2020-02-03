@@ -1,1 +1,1 @@
-TOKEN = "example"
+TOKEN = "Example"
