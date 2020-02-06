@@ -2,6 +2,9 @@ import discord
 from discord.ext import commands
 import random
 from config import TOKEN
+from googletrans import Translator
+
+translator = Translator()
 
 bot = commands.Bot(command_prefix='.') # Префикс бота.
 
@@ -54,5 +57,10 @@ async def clear(ctx,amount=1):              # Команда, удаляющая
 async def choose(ctx, * , question):
     questions = question.split("|")
     await ctx.send(f"Я думаю, {random.choice(questions)}")
+
+@bot.command(help=" <---- This command translates a string you send, in format 'destination language, text'")              # Команда, переводящая строку, заданную командой, с принятием языка, на который нужно перевести.
+async def translate(ctx,lang,*,text):
+    response = translator.translate(dest=lang,text=text)
+    await ctx.send(f"Translate is: {response.text}")
 
 bot.run(TOKEN)
