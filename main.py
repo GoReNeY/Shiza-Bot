@@ -1,11 +1,24 @@
 import discord
-from discord.ext import commands
+import nacl
+import ffmpeg
 import random
-from config import TOKEN
-from googletrans import Translator
+import json
 import json_manipulate as helper
+import os
+import urllib.request
+
+
+from config import TOKEN
+from discord.ext import commands
+from discord.utils import get
+from bs4 import BeautifulSoup
+from googletrans import Translator
+
 
 translator = Translator()
+
+global last_post
+last_post = None
 
 bot = commands.Bot(command_prefix='.') # Префикс бота.
 
@@ -83,5 +96,31 @@ async def choose(ctx, * , question):
 async def translate(ctx,lang,*,text):
     response = translator.translate(dest=lang,text=text)
     await ctx.send(f"Translate is: {response.text}")
+
+@bot.command(help=" This command turn on parcing daily best articles on 'Habr.com'")
+@commands.has_permissions(administrator=True)
+async def habr_start(ctx):
+    await ctx.send("Парсинг начат.")
+    global last_post, habr_status
+    responce = urllib.request.urlopen("https://habr.com/ru/top/")
+    soup = BeautifulSoup(responce)
+    habr_status = True
+
+    while habr_status:
+        articles = soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link")
+        for post in articles:
+            if habr_status == False:
+                break
+            if post == last_post:
+                break
+            await ctx.send(post.get("href"))
+        last_post = articles[0]
+
+@bot.command(help=" This command turn off parcing daily best articles on 'Habr.com'")
+@commands.has_permissions(administrator=True)
+async def habr_stop(ctx):
+    global habr_status
+    habr_status = False
+    await ctx.send("Парсинг окончен.")
 
 bot.run(TOKEN)
