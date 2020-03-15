@@ -117,7 +117,7 @@ async def habr_start(ctx):
         pages = soup.find("ul", class_="toggle-menu toggle-menu_pagination").find_all("a")
         pages_list = [i.get("href") for i in pages]
         for page in pages_list:
-            if not page or page == None:
+            if not pages_list or page == None:
                 pass
             page_soup = BeautifulSoup(urllib.request.urlopen(main_url + page), features="html.parser")
             articles.extend(page_soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link"))
