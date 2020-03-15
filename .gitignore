@@ -1,3 +1,4 @@
 config.py
 autoroles.json
 *.pyc
+*.log

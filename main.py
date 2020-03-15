@@ -6,7 +6,8 @@ import json
 import json_manipulate as helper
 import os
 import urllib.request
-
+import logging
+import asyncio
 
 from config import TOKEN
 from discord.ext import commands
@@ -16,6 +17,10 @@ from googletrans import Translator
 
 
 translator = Translator()
+
+logging.basicConfig(filename='bot.log', format='%(asctime)s -%(levelname)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
+logging.info("--------------------------------------------------------------------------------------------------------------------------")
+logging.info("New program seance started.")
 
 global last_post
 last_post = None
@@ -100,21 +105,26 @@ async def translate(ctx,lang,*,text):
 @bot.command(help=" This command turn on parcing daily best articles on 'Habr.com'")
 @commands.has_permissions(administrator=True)
 async def habr_start(ctx):
-    await ctx.send("Парсинг начат.")
     global last_post, habr_status
-    responce = urllib.request.urlopen("https://habr.com/ru/top/")
-    soup = BeautifulSoup(responce)
+    main_url = "https://habr.com/ru/top/"
+    responce = urllib.request.urlopen(main_url)
+    soup = BeautifulSoup(responce, features="html.parser")
     habr_status = True
+    await ctx.send("Парсинг начат.")
 
     while habr_status:
         articles = soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link")
-        for post in articles:
-            if habr_status == False:
-                break
+        pages = soup.find("ul", class_="toggle-menu toggle-menu_pagination").find_all("a")
+        pages_list = [i.get("href") for i in pages]
+        for page in pages_list:
+            page_soup = BeautifulSoup(urllib.request.urlopen(main_url + page), features="html.parser")
+            articles.extend(page_soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link"))
+        for post in articles[::-1]:
             if post == last_post:
                 break
             await ctx.send(post.get("href"))
-        last_post = articles[0]
+        last_post = articles[-1]
+        await asyncio.sleep(10)
 
 @bot.command(help=" This command turn off parcing daily best articles on 'Habr.com'")
 @commands.has_permissions(administrator=True)
