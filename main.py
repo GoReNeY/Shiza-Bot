@@ -8,6 +8,7 @@ import os
 import urllib.request
 import logging
 import asyncio
+import time
 
 from config import TOKEN
 from discord.ext import commands
@@ -15,6 +16,7 @@ from discord.utils import get
 from bs4 import BeautifulSoup
 from googletrans import Translator
 
+moderator_roles = ["Mastermind", "Moderator"]
 
 translator = Translator()
 
@@ -57,7 +59,7 @@ async def on_guild_join(guild):
 # Commands
 
 @bot.command(help=" <---  This command sets up an role, which will be given to a new member.")
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*moderator_roles)
 # Задавание роли, которая будет выдаватся автоматически новому участнику.
 async def autorole(ctx,*,name):
     for i in ctx.guild.roles:
@@ -84,7 +86,7 @@ async def _8ball(ctx, * , question):
     await ctx.send(f"Вопрос: {question}\nОтвет: {random.choice(responses)}")
 
 @bot.command()
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*moderator_roles)
 #Команда, удаляющая amount число сообщений, и после выводящая отчёт, содержащий количество удаленных сообщений и объект участника, который его отправил.
 async def clear(ctx,amount=1):             
     await ctx.channel.purge(limit=amount+1) 
@@ -103,7 +105,7 @@ async def translate(ctx,lang,*,text):
     await ctx.send(f"Translate is: {response.text}")
 
 @bot.command(help=" This command turn on parcing daily best articles on 'Habr.com'")
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*moderator_roles)
 async def habr_start(ctx):
     global last_post, habr_status
     main_url = "https://habr.com/ru/top/"
@@ -116,7 +118,7 @@ async def habr_start(ctx):
         articles = soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link")
         pages = soup.find("ul", class_="toggle-menu toggle-menu_pagination")
         if pages != None:
-            pages.find_all("a")
+            pages = pages.find_all("a")
             pages_list = [i.get("href") for i in pages]
         else:
             pages_list = []
@@ -129,11 +131,12 @@ async def habr_start(ctx):
             if post == last_post:
                 break
             await ctx.send(post.get("href"))
+            time.sleep(0.5)
         last_post = articles[-1]
         await asyncio.sleep(10)
 
 @bot.command(help=" This command turn off parcing daily best articles on 'Habr.com'")
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*moderator_roles)
 async def habr_stop(ctx):
     global habr_status
     habr_status = False
