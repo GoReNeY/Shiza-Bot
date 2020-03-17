@@ -24,8 +24,7 @@ logging.basicConfig(filename='bot.log', format='%(asctime)s -%(levelname)s - %(m
 logging.info("--------------------------------------------------------------------------------------------------------------------------")
 logging.info("New program seance started.")
 
-global last_post
-last_post = None
+curnt_articles = []
 
 bot = commands.Bot(command_prefix='.') # Префикс бота.
 
@@ -107,7 +106,7 @@ async def translate(ctx,lang,*,text):
 @bot.command(help=" This command turn on parcing daily best articles on 'Habr.com'")
 @commands.has_any_role(*moderator_roles)
 async def habr_start(ctx):
-    global last_post, habr_status
+    global habr_status, curnt_articles
     main_url = "https://habr.com/ru/top/"
     responce = urllib.request.urlopen(main_url)
     soup = BeautifulSoup(responce, features="html.parser")
@@ -127,12 +126,13 @@ async def habr_start(ctx):
                 pass
             page_soup = BeautifulSoup(urllib.request.urlopen(main_url + page), features="html.parser")
             articles.extend(page_soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link"))
-        for post in articles[::-1]:
-            if post == last_post:
-                break
+        new_articles = [i for i in articles if i not in curnt_articles]
+        if not new_articles:
+            pass
+        for post in new_articles[::-1]:
             await ctx.send(post.get("href"))
             time.sleep(0.5)
-        last_post = articles[-1]
+        curnt_articles = articles
         await asyncio.sleep(10)
 
 @bot.command(help=" This command turn off parcing daily best articles on 'Habr.com'")
