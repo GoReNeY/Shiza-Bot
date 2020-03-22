@@ -2,13 +2,12 @@ import discord
 import nacl
 import ffmpeg
 import random
-import json
-import json_manipulate as helper
 import os
 import urllib.request
 import logging
 import asyncio
 import time
+import sqlite3
 
 from config import TOKEN
 from discord.ext import commands
@@ -17,14 +16,13 @@ from bs4 import BeautifulSoup
 from googletrans import Translator
 
 moderator_roles = ["Mastermind", "Moderator"]
+channels = [687013888603979776, 688041352839036959]
 
 translator = Translator()
 
 logging.basicConfig(filename='bot.log', format='%(asctime)s -%(levelname)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S', level=logging.INFO)
 logging.info("--------------------------------------------------------------------------------------------------------------------------")
 logging.info("New program seance started.")
-
-curnt_articles = []
 
 bot = commands.Bot(command_prefix='.') # Префикс бота.
 
@@ -38,36 +36,59 @@ async def on_ready():
     print("Бот готов.")
 
 @bot.event
-#При заходе на сервер нового участника, бот автоматически выдаст ему роль, которая прописана в autoroles.json с помощью команды autorole.
 async def on_member_join(member):
-    tmp = helper.read("autoroles.json")
-    autoroles = tmp.get("auto_roles")
-    ID = member.guild.id
-    for key in autoroles:
-        if key == str(ID):
-            role = member.guild.get_role(autoroles.get(key))
-            try: await member.add_roles(role)
-            except Exception: print("Bot cannot give this role bcs it's too high for him!")
-            break
-
+    conn = sqlite3.connect("bot_database.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT role_id FROM autoroles WHERE guild_id = ?", (member.guild.id, ))
+        role_id = cursor.fetchone()
+    except Exception:
+        return
+    else:
+        if role_id == None:
+            return
+        role = member.guild.get_role(*role_id)
+        try:
+            await member.add_roles(role)
+        except Exception:
+            print("Эта роль сликом высока для меня!")
+    
+            
 @bot.event
 async def on_guild_join(guild):
-    print(f"I'm Joined server '{guild.name}'!")
+    print(f"I'm joined server '{guild.name}'!")
         
 #-------------------------------------------------------------------------------------------------------
 # Commands
 
 @bot.command(help=" <---  This command sets up an role, which will be given to a new member.")
-@commands.has_any_role(*moderator_roles)
+@commands.has_any_role("Mastermind")
 # Задавание роли, которая будет выдаватся автоматически новому участнику.
 async def autorole(ctx,*,name):
-    for i in ctx.guild.roles:
+    if name == "reset":
+        conn = sqlite3.connect("bot_database.db")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM autoroles WHERE guild_id = ?", (ctx.guild.id, ))
+        conn.commit()
+        await ctx.send("Автороль сброшена.")
+        return
+    for role in ctx.guild.roles:
         check = True
-        if i.name == name:
-            await ctx.send(f"Теперь '{ctx.guild.get_role(i.id).name}' это роль по умолчанию.")
-            temp = helper.read("autoroles.json")
-            temp["auto_roles"][str(ctx.guild.id)] = i.id
-            helper.write(temp, "autoroles.json")
+        if role.name == name:
+            conn = sqlite3.connect("bot_database.db")
+            cursor = conn.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS autoroles (guild_id INTEGER, role_id INTEGER)")
+            conn.commit()
+            cursor.execute("SELECT guild_id FROM autoroles WHERE guild_id = ?", (ctx.guild.id, ))
+            res = cursor.fetchall()
+            if len(res) != 0:
+                cursor.execute("UPDATE autoroles SET role_id = ? WHERE guild_id = ?", (role.id, ctx.guild.id, ))
+                conn.commit()
+            else:
+                cursor.execute("INSERT INTO autoroles (guild_id, role_id) VALUES (?,?)", (ctx.guild.id, role.id, ))
+                conn.commit()
+
+            await ctx.send(f"Теперь '{name}' это роль по умолчанию.")
             check = False
             break
     if check == True:
@@ -106,11 +127,20 @@ async def translate(ctx,lang,*,text):
 @bot.command(help=" This command turn on parcing daily best articles on 'Habr.com'")
 @commands.has_any_role(*moderator_roles)
 async def habr_start(ctx):
-    global habr_status, curnt_articles
+    if ctx.channel.id not in channels:
+        await ctx.send(f"Хуй тебе, {ctx.message.author.mention}, здесь я парсить не буду!")
+        return
+    global habr_status
     main_url = "https://habr.com/ru/top/"
-    responce = urllib.request.urlopen(main_url)
-    soup = BeautifulSoup(responce, features="html.parser")
+    soup = BeautifulSoup(urllib.request.urlopen(main_url), features="html.parser")
     habr_status = True
+    count = 0
+
+    conn = sqlite3.connect("bot_database.db")
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS articles (article text)")
+    conn.commit()
+
     await ctx.send("Парсинг начат.")
 
     while habr_status:
@@ -125,14 +155,22 @@ async def habr_start(ctx):
             if not pages_list:
                 pass
             page_soup = BeautifulSoup(urllib.request.urlopen(main_url + page), features="html.parser")
-            articles.extend(page_soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link"))
-        new_articles = [i for i in articles if i not in curnt_articles]
-        if not new_articles:
-            pass
-        for post in new_articles[::-1]:
-            await ctx.send(post.get("href"))
-            time.sleep(0.5)
-        curnt_articles = articles
+            try:
+                articles.extend(page_soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link"))
+            except AttributeError:
+                count += 1
+                print(f"Фронтендеры нагадили в {count} раз!")
+                pass
+        for post in articles:
+            cursor.execute("SELECT article FROM articles WHERE article = ?",(post.get("href"),))
+            res = cursor.fetchall()
+            if len(res) != 0:
+                pass
+            else:
+                cursor.execute("INSERT INTO articles (article) VALUES (?)", (post.get("href"),))
+                await ctx.send(post.get("href"))
+                conn.commit()
+                time.sleep(0.5)
         await asyncio.sleep(10)
 
 @bot.command(help=" This command turn off parcing daily best articles on 'Habr.com'")
@@ -141,5 +179,13 @@ async def habr_stop(ctx):
     global habr_status
     habr_status = False
     await ctx.send("Парсинг окончен.")
+
+@bot.command()
+@commands.has_any_role("Mastermind")
+async def db_clear(ctx):
+    conn = sqlite3.connect("bot_database.db")
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE articles")
+    await ctx.send("Таблица статей очищена.")
 
 bot.run(TOKEN)
