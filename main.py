@@ -1,6 +1,4 @@
 import discord
-import nacl
-import ffmpeg
 import random
 import os
 import urllib.request
@@ -24,7 +22,7 @@ logging.basicConfig(filename='bot.log', format='%(asctime)s -%(levelname)s - %(m
 logging.info("--------------------------------------------------------------------------------------------------------------------------")
 logging.info("New program seance started.")
 
-bot = commands.Bot(command_prefix='.') # Префикс бота.
+bot = commands.Bot(command_prefix='#') # Префикс бота.
 
 #-------------------------------------------------------------------------------------------------------
 # Events
@@ -32,7 +30,7 @@ bot = commands.Bot(command_prefix='.') # Префикс бота.
 @bot.event
 # Когда бот будет готов к работе, в консоль выводится "Бот готов."
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Activity(name="actively updating!",type=discord.ActivityType.listening))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Activity(name="actively updating! (#help)",type=discord.ActivityType.listening))
     print("Бот готов.")
 
 @bot.event
@@ -120,15 +118,18 @@ async def choose(ctx, * , question):
 
 @bot.command(help=" <---- This command translates a string you send, in format 'destination language, text'")
 # Команда, переводящая строку, заданную командой, с принятием языка, на который нужно перевести.
-async def translate(ctx,lang,*,text):
+async def translate(ctx,*,text, lang = "en"):
     response = translator.translate(dest=lang,text=text)
+    for i in response.text:
+        if i in ctx.guild.members:
+            response.text.replace(i, i.mention)
     await ctx.send(f"Translate is: {response.text}")
 
-@bot.command(help=" This command turn on parcing daily best articles on 'Habr.com'")
+@bot.command(help=" This command turn on parsing daily best articles on 'Habr.com'")
 @commands.has_any_role(*moderator_roles)
 async def habr_start(ctx):
     if ctx.channel.id not in channels:
-        await ctx.send(f"Хуй тебе, {ctx.message.author.mention}, здесь я парсить не буду!")
+        await ctx.send(f"Нет, {ctx.message.author.mention}, здесь я парсить не буду!")
         return
     global habr_status
     main_url = "https://habr.com/ru/top/"
@@ -141,7 +142,7 @@ async def habr_start(ctx):
     cursor.execute("CREATE TABLE IF NOT EXISTS articles (article text)")
     conn.commit()
 
-    await ctx.send("Парсинг начат.")
+    await ctx.channel.purge(limit = 1)
 
     while habr_status:
         articles = soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link")
@@ -152,19 +153,17 @@ async def habr_start(ctx):
         else:
             pages_list = []
         for page in pages_list:
-            if not pages_list:
-                pass
-            page_soup = BeautifulSoup(urllib.request.urlopen(main_url + page), features="html.parser")
             try:
+                page_soup = BeautifulSoup(urllib.request.urlopen(main_url + page), features="html.parser")
                 articles.extend(page_soup.find("ul", class_="content-list content-list_posts shortcuts_items").find_all("a", class_="post__title_link"))
-            except AttributeError:
+            except Exception:
                 count += 1
                 print(f"Фронтендеры нагадили в {count} раз!")
                 pass
         for post in articles:
             cursor.execute("SELECT article FROM articles WHERE article = ?",(post.get("href"),))
-            res = cursor.fetchall()
-            if len(res) != 0:
+            res = cursor.fetchone()
+            if res != None:
                 pass
             else:
                 cursor.execute("INSERT INTO articles (article) VALUES (?)", (post.get("href"),))
@@ -173,7 +172,7 @@ async def habr_start(ctx):
                 time.sleep(0.5)
         await asyncio.sleep(10)
 
-@bot.command(help=" This command turn off parcing daily best articles on 'Habr.com'")
+@bot.command(help=" This command turn off parsing daily best articles on 'Habr.com'")
 @commands.has_any_role(*moderator_roles)
 async def habr_stop(ctx):
     global habr_status
